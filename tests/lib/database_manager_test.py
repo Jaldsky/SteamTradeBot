@@ -26,3 +26,10 @@ class TestDatabaseManager(TestCase):
         with self.subTest('No data in the table'):
             insert_data['firstname'] = 'Alex'
             self.assertFalse(self.instance.check_table_data_exist('test', insert_data))
+
+    def test_get_table_data(self):
+        self.instance.create_table('test', ['firstname TEXT', 'lastname TEXT', 'age INTEGER'])
+        insert_data = {'firstname': 'Bob', 'lastname': 'Orange', 'age': 101}
+        self.instance.insert_table_data('test', insert_data)
+
+        self.assertEqual([(1, 'Bob', 'Orange', 101)], self.instance.get_table_data('test'))

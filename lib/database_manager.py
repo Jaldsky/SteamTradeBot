@@ -44,7 +44,7 @@ class DatabaseManager(DatabaseManagerBase):
             id INTEGER PRIMARY KEY,
             {', '.join(fields)}
             )
-            ''')
+        ''')
         self.conn.commit()
         self.close_connect()
 
@@ -80,7 +80,8 @@ class DatabaseManager(DatabaseManagerBase):
             values = ', '.join([f":{key}" for key in data.keys()])
             self.cursor.execute(f'''
                 INSERT INTO {table_name} ({columns})
-                VALUES ({values})''', data)
+                VALUES ({values})
+            ''', data)
             self.conn.commit()
             self.close_connect()
 
@@ -99,7 +100,26 @@ class DatabaseManager(DatabaseManagerBase):
         self.cursor.execute(f'''
             SELECT *
             FROM {table_name}
-            WHERE {clause}''', data)
+            WHERE {clause}
+        ''', data)
         result = self.cursor.fetchone()
         self.close_connect()
         return result is not None
+
+    def get_table_data(self, table_name: str, limit: int = 1) -> list:
+        """Method to get data from table.
+
+        Args:
+            table_name: table name.
+            limit: limit on receiving rows in the table.
+
+        Returns:
+            List with arrays of data.
+        """
+        self.connect()
+        self.cursor.execute(f'''
+            SELECT *
+            FROM {table_name}
+            LIMIT {limit}
+        ''')
+        return self.cursor.fetchall()
