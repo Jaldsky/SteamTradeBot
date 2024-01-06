@@ -21,7 +21,6 @@ class DriverSettingsBase(ABC):
 
 @dataclass
 class DriverSettings(DriverSettingsBase):
-    settings: Options = Options()
 
     def __post_init__(self):
         _ = [self.settings.add_argument(i) for i in webdriver_settings]
@@ -40,9 +39,6 @@ class DriverBase(ABC):
 
 @dataclass
 class Driver(DriverBase):
-    settings: DriverSettings = DriverSettings()
-    driver_type: str = 'chrome'
-    driver: Optional[WebDriver] = None
 
     def __post_init__(self) -> None:
         if self.driver_type.lower() == 'chrome':
