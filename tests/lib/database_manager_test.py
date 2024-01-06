@@ -1,4 +1,5 @@
 from unittest import TestCase
+from os import getcwd, path
 
 from lib.database_manager import DatabaseManager
 
@@ -6,7 +7,7 @@ from lib.database_manager import DatabaseManager
 class TestDatabaseManager(TestCase):
 
     def setUp(self) -> None:
-        self.instance = DatabaseManager('TestDB.db')
+        self.instance = DatabaseManager(path.join(getcwd(), 'tests', 'TestDB.db'))
 
     def test_create_table(self):
         self.instance.create_table('test', ['firstname TEXT', 'lastname TEXT', 'age INTEGER'])
