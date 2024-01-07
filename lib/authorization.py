@@ -20,24 +20,7 @@ DRIVER_TIMEOUT = 300
 
 
 @dataclass
-class AuthorizationDataBase:
-    db_manager: Optional[DatabaseManager] = None
-
-    table_name: str = 'auth'
-    table_limit: int = 50
-
-    def __post_init__(self) -> None:
-        db_name = ''
-        if DEBUG:
-            db_name = path.join(getcwd(), 'tests', 'TestDB.db')
-
-        self.db_manager = DatabaseManager(db_name)
-        if self.db_manager is None:
-            raise Exception('DB Manager is missing')
-
-
-@dataclass
-class AuthorizationBase(ABC, AuthorizationDataBase):
+class AuthorizationBase(ABC):
     driver: Optional[Union[Driver, WebDriver]] = None
 
     @abstractmethod
@@ -58,15 +41,10 @@ class Authorization(AuthorizationBase):
         field = self.find_element(waiter, locator)
         field.send_keys(text)
 
-    def update_auth_table(self):
-        user_agent: str = get_user_agent(self.driver)
-        print(user_agent)
-        self.db_manager.update_record_at_table(self.table_name, 'authorized = 1', f'user_agent = \'{user_agent}\'')
-
-    def exec(self):
+    def exec(self) -> None:
         super().exec()
         self.driver.get('https://store.steampowered.com/login/')
-        self.update_auth_table()
+
         waiter = WebDriverWait(self.driver, self.driver_timeout)
         try:
             self.find_field_send_text(waiter, (By.XPATH, LOGIN_PATH), STEAM_LOGIN)
@@ -77,8 +55,6 @@ class Authorization(AuthorizationBase):
         except TypeError:
             raise TypeError('Enter steam login and password')
 
-        print(get_user_agent(self.driver))
-
         auth_code_panel = self.find_element(waiter, (By.XPATH, AUTH_CODE))
         if auth_code_panel:
             print('Confirm session')
@@ -86,11 +62,12 @@ class Authorization(AuthorizationBase):
 
         if auth_code_panel:
             raise Exception('You must enter a confirmation code')
-        # self.update_auth_table()
 
 
 @dataclass
-class AuthorizationManagerBase(ABC, AuthorizationDataBase):
+class AuthorizationManagerBase(ABC):
+    table_name: str = 'auth'
+    table_limit: int = 50
 
     @abstractmethod
     def exec(self):
@@ -100,10 +77,23 @@ class AuthorizationManagerBase(ABC, AuthorizationDataBase):
 @dataclass
 class AuthorizationManager(AuthorizationManagerBase):
 
+    def __post_init__(self) -> None:
+        db_name = ''
+        if DEBUG:
+            db_name = path.join(getcwd(), 'tests', 'TestDB.db')
+
+        self.db_manager = DatabaseManager(db_name)
+        if self.db_manager is None:
+            raise Exception('DB Manager is missing')
+
     def create_auth_table(self) -> None:
         if not self.db_manager.check_table_exist(self.table_name):
             db_fields = ['date DATE', 'user_agent TEXT', 'authorized BOOLEAN']
             self.db_manager.create_table(self.table_name, db_fields)
+
+    def update_auth_table(self, driver: Union[Driver, WebDriver]) -> None:
+        user_agent: str = get_user_agent(driver)
+        self.db_manager.update_record_at_table(self.table_name, 'authorized = 1', f'user_agent = \'{user_agent}\'')
 
     @property
     def get_user_agent_from_table(self) -> list[tuple]:
@@ -132,5 +122,6 @@ class AuthorizationManager(AuthorizationManagerBase):
             self.insert_user_agent_to_table(current_user_agent)
 
         Authorization(driver=driver).exec()
+        self.update_auth_table(driver)
 
         return driver
