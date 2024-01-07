@@ -5,7 +5,7 @@ DEBUG = False
 DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 
 webdriver_settings = (
-    '--headless',
+    # '--headless',
     '--window-size=1200x600',
 )
 
