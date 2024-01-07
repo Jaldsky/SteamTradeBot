@@ -122,4 +122,19 @@ class DatabaseManager(DatabaseManagerBase):
             FROM {table_name}
             LIMIT {limit}
         ''')
-        return self.cursor.fetchall()
+        result = self.cursor.fetchall()
+        self.close_connect()
+        return result
+
+    def clear_table_data(self, table_name: str) -> None:
+        """Method to clear records in a table.
+
+        Args:
+            table_name: table name.
+        """
+        self.connect()
+        self.cursor.execute(f'''
+            DELETE FROM {table_name}
+        ''')
+        self.conn.commit()
+        self.close_connect()
