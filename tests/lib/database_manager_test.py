@@ -27,12 +27,16 @@ class TestDatabaseManager(TestCase):
             insert_data['firstname'] = 'Alex'
             self.assertFalse(self.instance.check_table_data_exist('test', insert_data))
 
+        self.instance.clear_table_data('test')
+
     def test_get_table_data(self):
         self.instance.create_table('test', ['firstname TEXT', 'lastname TEXT', 'age INTEGER'])
         insert_data = {'firstname': 'Bob', 'lastname': 'Orange', 'age': 101}
         self.instance.insert_table_data('test', insert_data)
 
         self.assertEqual([(1, 'Bob', 'Orange', 101)], self.instance.get_table_data('test'))
+
+        self.instance.clear_table_data('test')
 
     def test_clear_table_data(self):
         self.instance.create_table('test', ['firstname TEXT', 'lastname TEXT', 'age INTEGER'])
@@ -45,3 +49,15 @@ class TestDatabaseManager(TestCase):
         with self.subTest('Checking that data has been deleted from the table'):
             self.instance.clear_table_data('test')
             self.assertFalse(self.instance.get_table_data('test'))
+
+        self.instance.clear_table_data('test')
+
+    def test_update_record_at_table(self):
+        self.instance.create_table('test', ['firstname TEXT', 'lastname TEXT', 'age INTEGER'])
+        insert_data = {'firstname': 'Bob', 'lastname': 'Orange', 'age': 101}
+        self.instance.insert_table_data('test', insert_data)
+
+        self.instance.update_record_at_table('test', 'firstname = \'Max\'', 'lastname = \'Orange\'')
+
+        self.assertIn('Max', self.instance.get_table_data('test')[0][1])
+        self.instance.clear_table_data('test')

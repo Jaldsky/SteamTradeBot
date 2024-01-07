@@ -138,3 +138,20 @@ class DatabaseManager(DatabaseManagerBase):
         ''')
         self.conn.commit()
         self.close_connect()
+
+    def update_record_at_table(self, table_name: str, new_data: str, search_condition: str) -> None:
+        """Method to clear records in a table.
+
+        Args:
+            table_name: table name.
+            new_data: new data to replace.
+            search_condition: record search condition.
+        """
+        self.connect()
+        self.cursor.execute(f'''
+            UPDATE {table_name}
+            SET {new_data}
+            WHERE {search_condition}
+        ''')
+        self.conn.commit()
+        self.close_connect()
