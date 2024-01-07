@@ -1,3 +1,4 @@
+import json
 from abc import ABC, abstractmethod
 from os import getcwd, path
 from dataclasses import dataclass
@@ -14,7 +15,7 @@ from selenium.webdriver.support.expected_conditions import presence_of_element_l
 from settings import STEAM_LOGIN, STEAM_PASSWORD, DEBUG, DATE_FORMAT
 from lib.database_manager import DatabaseManager
 from lib.web_elements import LOGIN_PATH, PASSWORD_PATH, AUTH_BUTTON, AUTH_CODE
-from lib.webdriver import Driver, get_user_agent
+from lib.webdriver import Driver, get_user_agent, add_cookies
 
 DRIVER_TIMEOUT = 300
 
@@ -88,12 +89,14 @@ class AuthorizationManager(AuthorizationManagerBase):
 
     def create_auth_table(self) -> None:
         if not self.db_manager.check_table_exist(self.table_name):
-            db_fields = ['date DATE', 'user_agent TEXT', 'authorized BOOLEAN']
+            db_fields = ['date DATE', 'user_agent TEXT', 'cookies TEXT', 'authorized BOOLEAN']
             self.db_manager.create_table(self.table_name, db_fields)
 
-    def update_auth_table(self, driver: Union[Driver, WebDriver]) -> None:
+    def update_session_auth_table(self, driver: Union[Driver, WebDriver]) -> None:
+        cookies: str = json.dumps(driver.get_cookies())
         user_agent: str = get_user_agent(driver)
-        self.db_manager.update_record_at_table(self.table_name, 'authorized = 1', f'user_agent = \'{user_agent}\'')
+        self.db_manager.update_record_at_table(
+            self.table_name, f'authorized = 1, cookies = \'{cookies}\'', f'user_agent = \'{user_agent}\'')
 
     @property
     def get_user_agent_from_table(self) -> list[tuple]:
@@ -109,19 +112,24 @@ class AuthorizationManager(AuthorizationManagerBase):
             data = {'date': current_date, 'user_agent': user_agent, 'authorized': authorized}
             self.db_manager.insert_table_data(self.table_name, data)
 
-    def exec(self) -> Driver:
+    def exec(self) -> Union[Driver, WebDriver]:
         self.create_auth_table()
 
         #  in the future you can add multithreading here
         if self.check_user_agent_record_at_table(self.table_name):
-            table_user_agent: tuple[str] = (f'user-agent={self.get_user_agent_from_table[0][2]}',)
+            first_record = self.get_user_agent_from_table[0]
+            table_user_agent: tuple[str] = (f'user-agent={first_record[2]}',)  # first_record[2] - user_agent column
             driver = Driver(custom_settings=table_user_agent).get_driver
+            if table_cookies := first_record[3]:  # first_record[3] - cookie column
+                driver.get('https://store.steampowered.com/login/')
+                # driver.delete_all_cookies()
+                add_cookies(driver, json.loads(table_cookies))
         else:
             driver = Driver().get_driver
             current_user_agent = get_user_agent(driver)
             self.insert_user_agent_to_table(current_user_agent)
 
-        Authorization(driver=driver).exec()
-        self.update_auth_table(driver)
+            Authorization(driver=driver).exec()
+            self.update_session_auth_table(driver)
 
         return driver
