@@ -60,5 +60,9 @@ class Driver(DriverBase):
         return self.driver
 
 
-def get_user_agent(driver: Optional[Union[Driver, WebDriver]]):
+def get_user_agent(driver: Union[Driver, WebDriver]):
     return driver.execute_script("return navigator.userAgent;")
+
+
+def add_cookies(driver: Union[Driver, WebDriver], cookies: list[dict]):
+    _ = [driver.add_cookie(i) for i in cookies]
