@@ -39,9 +39,9 @@ class TestDatabaseManager(TestCase):
         insert_data = {'firstname': 'Bob', 'lastname': 'Orange', 'age': 101}
         self.instance.insert_table_data('test', insert_data)
 
-        self.assertTrue(self.instance.check_table_data_exist('test', insert_data))
-        # checking that the data has been added to the table
+        with self.subTest('Checking that the data has been added to the table'):
+            self.assertTrue(self.instance.check_table_data_exist('test', insert_data))
 
-        self.instance.clear_table_data('test')
-        self.assertFalse(self.instance.get_table_data('test'))
-        # checking that data has been deleted from the table
+        with self.subTest('Checking that data has been deleted from the table'):
+            self.instance.clear_table_data('test')
+            self.assertFalse(self.instance.get_table_data('test'))
