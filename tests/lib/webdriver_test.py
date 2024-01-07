@@ -14,6 +14,6 @@ settings = (
 class TestWebDriver(TestCase):
 
     def test_webdriver(self) -> None:
-        instance = Driver()
+        instance = Driver().get_driver
         instance.get("https://www.google.ru/")
         self.assertEqual('Google', instance.title)

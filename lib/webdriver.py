@@ -1,7 +1,7 @@
 from settings import webdriver_settings
 
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, Union
 from dataclasses import dataclass
 
 from selenium.webdriver import Chrome
@@ -21,9 +21,13 @@ class DriverSettingsBase(ABC):
 
 @dataclass
 class DriverSettings(DriverSettingsBase):
+    custom_settings: Optional[tuple] = None
 
     def __post_init__(self):
-        _ = [self.settings.add_argument(i) for i in webdriver_settings]
+        settings = webdriver_settings
+        if custom_settings := self.custom_settings:
+            settings += custom_settings
+        _ = [self.settings.add_argument(i) for i in settings]
 
     @property
     def get_settings(self):
@@ -39,13 +43,22 @@ class DriverBase(ABC):
 
 @dataclass
 class Driver(DriverBase):
+    custom_settings: Optional[tuple] = None
 
     def __post_init__(self) -> None:
         if self.driver_type.lower() == 'chrome':
-            self.driver = Chrome(options=DriverSettings().get_settings)
+            self.driver = Chrome(
+                options=DriverSettings(
+                    custom_settings=self.custom_settings
+                ).get_settings
+            )
             return None
         raise Exception('Driver not found')
 
-    def __new__(cls) -> WebDriver:
-        cls.__post_init__(cls)
-        return cls.driver
+    @property
+    def get_driver(self):
+        return self.driver
+
+
+def get_user_agent(driver: Optional[Union[Driver, WebDriver]]):
+    return driver.execute_script("return navigator.userAgent;")
