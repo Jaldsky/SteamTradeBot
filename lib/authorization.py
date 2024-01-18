@@ -108,6 +108,12 @@ class AuthorizationManager(AuthorizationManagerBase):
         data = {'date': current_date, 'user_agent': user_agent, 'cookies': cookies, 'authorized': authorized}
         self.db_manager.insert_table_data(self.table_name, data)
 
+    def create_or_update_cred(self, user_agent: str, cookies: str) -> None:
+        if self.check_user_agent_at_table(user_agent):
+            self.update_cred(user_agent, cookies)
+        else:
+            self.insert_cred(user_agent, cookies)
+
     @property
     def get_valid_creds(self) -> list[tuple]:
         records: list[tuple] = self.get_data_from_table
