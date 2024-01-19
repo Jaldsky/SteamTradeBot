@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional, Union
 
+from selenium.common import TimeoutException
 from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
@@ -16,7 +17,7 @@ from lib.database_manager import DatabaseManager
 from lib.web_elements import LOGIN_FIELD, PASSWORD_FIELD, AUTH_BUTTON, GLOBAL_LOGIN_BUTTON
 from lib.webdriver import Driver, get_user_agent, add_cookies
 
-DRIVER_TIMEOUT = 300
+DRIVER_TIMEOUT = 10
 
 
 @dataclass
@@ -52,17 +53,22 @@ class Authorization(AuthorizationBase):
 
             global_login_button = self.find_element(waiter, (By.XPATH, GLOBAL_LOGIN_BUTTON))
             global_login_button.click()
-        else:
+
             try:
-                self.find_field_send_text(waiter, (By.XPATH, LOGIN_FIELD), STEAM_LOGIN)
-                self.find_field_send_text(waiter, (By.XPATH, PASSWORD_FIELD), STEAM_PASSWORD)
+                self.find_element(waiter, (By.XPATH, AUTH_BUTTON))
+            except TimeoutException:
+                return self.driver
 
-                auth_button = self.find_element(waiter, (By.XPATH, AUTH_BUTTON))
-                auth_button.click()
-            except TypeError:
-                raise TypeError('Enter steam login and password')
+        try:
+            self.find_field_send_text(waiter, (By.XPATH, LOGIN_FIELD), STEAM_LOGIN)
+            self.find_field_send_text(waiter, (By.XPATH, PASSWORD_FIELD), STEAM_PASSWORD)
 
-            print('Take breakpoint and confirm session')
+            auth_button = self.find_element(waiter, (By.XPATH, AUTH_BUTTON))
+            auth_button.click()
+        except TypeError:
+            raise TypeError('Enter steam login and password')
+
+        print('Take breakpoint and confirm session')
 
         return self.driver
 
@@ -89,9 +95,13 @@ class AuthorizationManager(AuthorizationManagerBase):
         if self.db_manager is None:
             raise Exception('DB Manager is missing')
 
+    @property
+    def get_current_date(self):
+        return datetime.now().strftime(DATE_FORMAT)
+
     def create_auth_table(self) -> None:
         if not self.db_manager.check_table_exist(self.table_name):
-            db_fields = ['date DATE', 'user_agent TEXT', 'cookies TEXT', 'authorized BOOLEAN']
+            db_fields = ['create_date DATE', 'update_date DATE', 'user_agent TEXT', 'cookies TEXT']
             self.db_manager.create_table(self.table_name, db_fields)
 
     @property
@@ -99,27 +109,46 @@ class AuthorizationManager(AuthorizationManagerBase):
         return self.db_manager.get_table_data(self.table_name, self.table_limit)
 
     @property
-    def check_records(self) -> bool:
+    def get_valid_creds(self, ) -> Optional[list[tuple]]:
         records: list[tuple] = self.get_data_from_table
-        return bool(records)
+        valid_creds = [i for i in records if i[3] and i[4] not in '[]']
+        if valid_creds:
+            return valid_creds
 
-    def insert_cred(self, user_agent: str, cookies: str, authorized: bool = True):
-        current_date = datetime.now().strftime(DATE_FORMAT)
-        data = {'date': current_date, 'user_agent': user_agent, 'cookies': cookies, 'authorized': authorized}
-        self.db_manager.insert_table_data(self.table_name, data)
+    def check_user_agent_at_table(self, user_agent: str) -> bool:
+        records: list[tuple] = self.get_data_from_table
+        return bool(any(i for i in records if i[3] == user_agent)) if records else False
 
-    def create_or_update_cred(self, user_agent: str, cookies: str) -> None:
+    def update_cred(self, user_agent: str, cookies: Optional[str]) -> None:
+        if not user_agent:
+            return
+
+        set_data = [f'update_date = \'{self.get_current_date}\'']
+        if cookies:
+            set_data.append(f'cookies = \'{cookies}\'')
+
+        set_data = ','.join(set_data)
+        search_condition = f'user_agent = \'{user_agent}\''
+        self.db_manager.update_record_at_table(self.table_name, set_data, search_condition)
+
+    def insert_cred(self, user_agent: str, cookies: str) -> None:
+        if user_agent and cookies:
+            current_date = self.get_current_date
+            data = {
+                'create_date': current_date,
+                'update_date': current_date,
+                'user_agent': user_agent,
+                'cookies': cookies
+            }
+            self.db_manager.insert_table_data(self.table_name, data)
+
+    def create_or_update_cred(self, user_agent: Optional[str] = None, cookies: Optional[str] = None) -> None:
+        if user_agent is None or cookies is None:
+            return
         if self.check_user_agent_at_table(user_agent):
             self.update_cred(user_agent, cookies)
         else:
             self.insert_cred(user_agent, cookies)
-
-    @property
-    def get_valid_creds(self) -> list[tuple]:
-        records: list[tuple] = self.get_data_from_table
-        valid_creds = [i for i in records if i[2] and i[3] not in '[]']
-        if valid_creds:
-            return valid_creds
 
     def exec(self, ) -> Union[Driver, WebDriver]:
         self.create_auth_table()
@@ -134,8 +163,9 @@ class AuthorizationManager(AuthorizationManagerBase):
                 driver = Authorization(driver=driver).exec(cookies=cookies)
         else:
             driver = Driver().get_driver
-            user_agent = get_user_agent(driver)
             driver = Authorization(driver=driver).exec()
-            cookies = json.dumps(driver.get_cookies())
-            self.insert_cred(user_agent, cookies)
+
+        user_agent = get_user_agent(driver)
+        cookies = json.dumps(driver.get_cookies())
+        self.create_or_update_cred(user_agent, cookies)
         return driver

@@ -16,57 +16,82 @@ class TestAuthorizationManager(TestCase):
         self.instance.create_auth_table()
         self.assertTrue(self.instance.db_manager.check_table_exist(self.instance.table_name))
 
-    def test_check_records(self):
-        self.instance.create_auth_table()
-        self.instance.db_manager.clear_table_data(self.instance.table_name)
-
-        with self.subTest('Empty table'):
-            self.assertFalse(self.instance.check_records)
-
-        with self.subTest('Table with records'):
-            user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.6099.131'
-            cookies = '''[{'domain': 'store.steampowered.com', 'expiry': 1736249629, 'httpOnly': False}]'''
-            self.instance.insert_cred(user_agent, cookies)
-            self.assertTrue(self.instance.check_records)
-
-        self.instance.db_manager.clear_table_data(self.instance.table_name)
-
     def test_get_valid_creds(self):
         self.instance.create_auth_table()
-        self.instance.db_manager.clear_table_data(self.instance.table_name)
 
-        with self.subTest('Valid creds'):
-            user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.6099.131'
-            cookies = '''[{'domain': 'store.steampowered.com', 'expiry': 1736249629, 'httpOnly': False}]'''
-            self.instance.insert_cred(user_agent, cookies)
+        with self.subTest('With user-agent, with cookies'):
+            self.instance.insert_cred('Mozilla/5.0', '[{"domain": ".steam.com"}]')
             self.assertTrue(self.instance.get_valid_creds)
             self.instance.db_manager.clear_table_data(self.instance.table_name)
 
-        with self.subTest('Without user_agent'):
-            user_agent = ''
-            cookies = '''[{'domain': 'store.steampowered.com', 'expiry': 1736249629, 'httpOnly': False}]'''
-            self.instance.insert_cred(user_agent, cookies)
+        with self.subTest('Without user-agent, with cookies'):
+            self.instance.insert_cred('', '[{"domain": ".steam.com"}]')
             self.assertIsNone(self.instance.get_valid_creds)
             self.instance.db_manager.clear_table_data(self.instance.table_name)
 
-        with self.subTest('Without cookies'):
-            user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.6099.131'
-            cookies = ''
-            self.instance.insert_cred(user_agent, cookies)
+        with self.subTest('With user-agent, without cookies'):
+            self.instance.insert_cred('Mozilla/5.0', '')
             self.assertIsNone(self.instance.get_valid_creds)
             self.instance.db_manager.clear_table_data(self.instance.table_name)
 
-        with self.subTest('Without cookies, empty list'):
-            user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.6099.131'
-            cookies = '[]'
-            self.instance.insert_cred(user_agent, cookies)
-
+        with self.subTest('With user-agent, without cookies - empty list'):
+            self.instance.insert_cred('Mozilla/5.0', '[]')
             self.assertIsNone(self.instance.get_valid_creds)
+            self.instance.db_manager.clear_table_data(self.instance.table_name)
+
+    def test_insert_cred(self):
+        self.instance.create_auth_table()
+
+        with self.subTest('Without user-agent, without cookies'):
+            self.instance.insert_cred('', '')
+            self.assertEqual(0, len(self.instance.get_data_from_table))
+            self.instance.db_manager.clear_table_data(self.instance.table_name)
+
+        with self.subTest('With user-agent, with cookies'):
+            self.instance.insert_cred('Mozilla/5.0', '[{"domain": ".steam.com"}]')
+            self.assertEqual(5, len(self.instance.get_data_from_table[0]))
+            self.instance.db_manager.clear_table_data(self.instance.table_name)
+
+        with self.subTest('With user-agent, without cookies'):
+            self.instance.insert_cred('Mozilla/5.0', '')
+            self.assertEqual(0, len(self.instance.get_data_from_table))
+            self.instance.db_manager.clear_table_data(self.instance.table_name)
+
+        with self.subTest('Without user-agent, with cookies'):
+            self.instance.insert_cred('', '[{"domain": ".steam.com"}]')
+            self.assertEqual(0, len(self.instance.get_data_from_table))
+            self.instance.db_manager.clear_table_data(self.instance.table_name)
+
+    def test_update_cred(self):
+        self.instance.create_auth_table()
+        self.instance.db_manager.clear_table_data(self.instance.table_name)
+
+        with self.subTest('Without user-agent, without cookies'):
+            self.instance.insert_cred('Mozilla/5.0', '[{"domain": ".steam.com"}]')
+            self.assertIsNone(self.instance.update_cred('', ''))
+            self.assertEqual(('Mozilla/5.0', '[{"domain": ".steam.com"}]'), self.instance.get_data_from_table[0][3:])
+            self.instance.db_manager.clear_table_data(self.instance.table_name)
+
+        with self.subTest('Without user-agent, with cookies'):
+            self.instance.insert_cred('Mozilla/5.0', '[{"domain": ".steam.com"}]')
+            self.instance.update_cred('', '[{"test": ".steam.com"}]')
+            self.assertEqual(('Mozilla/5.0', '[{"domain": ".steam.com"}]'), self.instance.get_data_from_table[0][3:])
+            self.instance.db_manager.clear_table_data(self.instance.table_name)
+
+        with self.subTest('With user-agent, with cookies'):
+            self.instance.insert_cred('Mozilla/5.0', '[{"domain": ".steam.com"}]')
+            self.instance.update_cred('Mozilla/5.0', '[{"test": ".steam.com"}]')
+            self.assertEqual(('Mozilla/5.0', '[{"test": ".steam.com"}]'), self.instance.get_data_from_table[0][3:])
+            self.instance.db_manager.clear_table_data(self.instance.table_name)
+
+        with self.subTest('With user-agent, without cookies'):
+            self.instance.insert_cred('Mozilla/5.0', '[{"domain": ".steam.com"}]')
+            self.instance.update_cred('Mozilla/5.0', '')
+            self.assertEqual(('Mozilla/5.0', '[{"domain": ".steam.com"}]'), self.instance.get_data_from_table[0][3:])
             self.instance.db_manager.clear_table_data(self.instance.table_name)
 
     def test_check_user_agent_at_table(self):
         self.instance.create_auth_table()
-        self.instance.db_manager.clear_table_data(self.instance.table_name)
 
         with self.subTest('Empty table'):
             data = []
