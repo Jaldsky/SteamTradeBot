@@ -1,7 +1,7 @@
 from unittest import TestCase
-from unittest.mock import patch, Mock
+from unittest.mock import patch
 
-from trade_bot import TradeBot
+from trade_bot.trade_bot import TradeBot
 
 
 @patch('lib.authorization.DEBUG', True)

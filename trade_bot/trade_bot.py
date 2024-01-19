@@ -32,4 +32,7 @@ class TradeBot(TradeBotBase):
         x = driver.get('https://steamcommunity.com/market/')
         print(x)
 
+        import time
+        time.sleep(30)
+
 
