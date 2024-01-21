@@ -106,20 +106,24 @@ class DatabaseManager(DatabaseManagerBase):
         self.close_connect()
         return result is not None
 
-    def get_table_data(self, table_name: str, limit: int = 1) -> list:
+    def get_table_data(self, table_name: str, search_condition: Optional[str] = None, limit: int = 1) -> list:
         """Method to get data from table.
 
         Args:
             table_name: table name.
             limit: limit on receiving rows in the table.
+            search_condition: record search condition.
 
         Returns:
             List with arrays of data.
         """
+        search_condition = '' if search_condition is None else f'WHERE {search_condition}'
+
         self.connect()
         self.cursor.execute(f'''
             SELECT *
             FROM {table_name}
+            {search_condition}
             LIMIT {limit}
         ''')
         result = self.cursor.fetchall()
