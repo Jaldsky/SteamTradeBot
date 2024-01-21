@@ -39,10 +39,11 @@ class DatabaseManager(DatabaseManagerBase):
             fields: fields to create (e.g. firstname TEXT or age INTEGER).
         """
         self.connect()
+        fields = ','.join(fields)
         self.cursor.execute(f'''
             CREATE TABLE IF NOT EXISTS {table_name} (
             id INTEGER PRIMARY KEY,
-            {', '.join(fields)}
+            {fields}
             )
         ''')
         self.conn.commit()
@@ -77,7 +78,7 @@ class DatabaseManager(DatabaseManagerBase):
         if not self.check_table_data_exist(table_name, data):
             self.connect()
             columns = ', '.join(data.keys())
-            values = ', '.join([f":{key}" for key in data.keys()])
+            values = ', '.join([f':{key}' for key in data.keys()])
             self.cursor.execute(f'''
                 INSERT INTO {table_name} ({columns})
                 VALUES ({values})
@@ -96,7 +97,7 @@ class DatabaseManager(DatabaseManagerBase):
             True - data in table, False - data not in table.
         """
         self.connect()
-        clause = " AND ".join([f"{key} = :{key}" for key in data.keys()])
+        clause = ' AND '.join([f'{key} = :{key}' for key in data.keys()])
         self.cursor.execute(f'''
             SELECT *
             FROM {table_name}
@@ -143,18 +144,19 @@ class DatabaseManager(DatabaseManagerBase):
         self.conn.commit()
         self.close_connect()
 
-    def update_record_at_table(self, table_name: str, new_data: str, search_condition: str) -> None:
+    def update_record_at_table(self, table_name: str, data: dict, search_condition: str) -> None:
         """Method to clear records in a table.
 
         Args:
             table_name: table name.
-            new_data: new data to replace.
+            data: new data to replace.
             search_condition: record search condition.
         """
+        data = ','.join(f'{k}=\'{v}\'' if isinstance(v, str) else f'{k}={v}' for k, v in data.items())
         self.connect()
         self.cursor.execute(f'''
             UPDATE {table_name}
-            SET {new_data}
+            SET {data}
             WHERE {search_condition}
         ''')
         self.conn.commit()

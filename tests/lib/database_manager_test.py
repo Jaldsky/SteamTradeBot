@@ -61,7 +61,7 @@ class TestDatabaseManager(TestCase):
         insert_data = {'firstname': 'Bob', 'lastname': 'Orange', 'age': 101}
         self.instance.insert_table_data('test_table', insert_data)
 
-        self.instance.update_record_at_table('test_table', 'firstname = \'Max\'', 'lastname = \'Orange\'')
+        self.instance.update_record_at_table('test_table', {'firstname': 'Max'}, 'lastname = \'Orange\'')
 
         self.assertIn('Max', self.instance.get_table_data('test_table')[0][1])
         self.instance.clear_table_data('test_table')
