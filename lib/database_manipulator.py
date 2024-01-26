@@ -1,16 +1,16 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from sqlite3 import connect, Connection, Cursor
-from typing import Optional
+from typing import Optional, Any
 
-from settings import DB_NAME
+from settings import DB_PATH
 
 
 @dataclass
 class DatabaseManagerBase(ABC):
     """Base class for interacting with the database and executing SQL queries."""
 
-    db_name: str = DB_NAME
+    db_name: str = DB_PATH
     conn: Optional[Connection] = None
     cursor: Optional[Cursor] = None
 
@@ -48,9 +48,9 @@ class DatabaseManager(DatabaseManagerBase):
         ''')
         result = self.cursor.fetchone()
         self.close_connect()
-        return result is not None
+        return bool(result)
 
-    def create_table(self, table_name: str, fields: list[str]) -> None:
+    def create_table(self, table_name: str, fields: dict[str, str]) -> None:
         """Table creation method.
 
         Args:
@@ -58,7 +58,7 @@ class DatabaseManager(DatabaseManagerBase):
             fields: fields to create (e.g. firstname TEXT or age INTEGER).
         """
         self.connect()
-        fields = ','.join(fields)
+        fields = ','.join(f'{k} {v}' for k, v in fields.items())
         self.cursor.execute(f'''
             CREATE TABLE IF NOT EXISTS {table_name} (
             id INTEGER PRIMARY KEY,
@@ -76,8 +76,7 @@ class DatabaseManager(DatabaseManagerBase):
         """
         self.connect()
         self.cursor.execute(f'''
-        DROP TABLE IF EXISTS {table_name};
-            )
+            DROP TABLE IF EXISTS {table_name}
         ''')
         self.conn.commit()
         self.close_connect()
@@ -121,31 +120,35 @@ class DatabaseManager(DatabaseManagerBase):
             self.conn.commit()
             self.close_connect()
 
-    def get_table_data(self, table_name: str, search_condition: Optional[str] = None, limit: int = 50) -> list:
+    def get_record_from_table(self, table_name: str, search_condition: Optional[dict] = None,
+                              limit: Optional[int] = None) -> list:
         """Method to get data from table.
 
         Args:
             table_name: table name.
-            limit: limit on receiving rows in the table.
             search_condition: record search condition.
+            limit: limit on receiving rows in the table.
 
         Returns:
             List with arrays of data.
         """
-        search_condition = '' if search_condition is None else f'WHERE {search_condition}'
+        if limit is None:
+            limit = 50
 
         self.connect()
-        self.cursor.execute(f'''
-            SELECT *
-            FROM {table_name}
-            {search_condition}
-            LIMIT {limit}
-        ''')
+        if search_condition is None:
+            query = f"SELECT * FROM {table_name} LIMIT {limit}"
+            self.cursor.execute(query)
+        else:
+            condition = ' AND '.join(f'{k} = ?' for k in search_condition.keys())
+            query = f"SELECT * FROM {table_name} WHERE {condition} LIMIT {limit}"
+            self.cursor.execute(query, tuple(search_condition.values()))
+
         result = self.cursor.fetchall()
         self.close_connect()
         return result
 
-    def update_record_at_table(self, table_name: str, data: dict, search_condition: str) -> None:
+    def update_record_at_table(self, table_name: str, data: dict, search_condition: dict) -> None:
         """Method to clear records in a table.
 
         Args:
@@ -154,12 +157,13 @@ class DatabaseManager(DatabaseManagerBase):
             search_condition: record search condition.
         """
         data = ','.join(f'{k}=\'{v}\'' if isinstance(v, str) else f'{k}={v}' for k, v in data.items())
+        condition = ' AND '.join(f'{k} = ?' for k in search_condition.keys())
         self.connect()
         self.cursor.execute(f'''
             UPDATE {table_name}
             SET {data}
-            WHERE {search_condition}
-        ''')
+            WHERE {condition}
+        ''', tuple(search_condition.values()))
         self.conn.commit()
         self.close_connect()
 
@@ -180,10 +184,25 @@ class DatabaseManager(DatabaseManagerBase):
 @dataclass
 class DataBaseManipulatorBase(ABC):
     """Base class for data manipulation."""
+    _instance = None
+    db_manager: DatabaseManager = DatabaseManager(DB_PATH)
+
+    def __new__(cls, *args, **kwargs):
+        """There is always one instance of the class.
+
+        Args:
+            args: args.
+            kwargs: kwargs.
+
+        Returns:
+            Class instance.
+        """
+        if cls._instance is None:
+            cls._instance = super(DataBaseManipulatorBase, cls).__new__(cls)
+        return cls._instance
 
     def __post_init__(self) -> None:
         """Post initialization."""
-        self.db_manager = DatabaseManager(DB_NAME)
         if self.db_manager is None:
             raise Exception('DB Manager is missing')
 
@@ -229,7 +248,7 @@ class DataBaseManipulatorBase(ABC):
         pass
 
     @abstractmethod
-    def create_or_update_table_data(self, table_name: str, data: dict, search_condition: str, limit: int) -> None:
+    def create_or_update_table_data(self, table_name: str, data: dict, search_condition: str) -> None:
         """A method for creating or updating data in a table."""
 
 
@@ -246,16 +265,25 @@ class DataBaseManipulator(DataBaseManipulatorBase):
         Returns:
             True - table exists, False - table not exists.
         """
+        if not table_name or not isinstance(table_name, str):
+            raise TableNameException(table_name)
+
         return bool(self.db_manager.check_table_exist(table_name))
 
-    def create_table(self, table_name: str, fields: list) -> None:
+    def create_table(self, table_name: str, field: dict[str, str]) -> None:
         """Method to create a table in a database.
 
         Args:
             table_name: table name.
-            fields: fields to create (e.g. firstname TEXT or age INTEGER).
+            field: fields to create (e.g. {'firstname': 'TEXT', 'age': 'INTEGER').
         """
-        self.db_manager.create_table(table_name, fields)
+        if not table_name or not isinstance(table_name, str):
+            raise TableNameException(table_name)
+
+        if not field or not isinstance(field, dict):
+            raise DataCreateTableException(field)
+
+        self.db_manager.create_table(table_name, field)
 
     def delete_table(self, table_name: str) -> None:
         """Method for removing a table from a database.
@@ -263,6 +291,9 @@ class DataBaseManipulator(DataBaseManipulatorBase):
         Args:
             table_name: table name.
         """
+        if not table_name or not isinstance(table_name, str):
+            raise TableNameException(table_name)
+
         self.db_manager.delete_table(table_name)
 
     def check_table_data_exist(self, table_name: str, data: dict) -> bool:
@@ -275,20 +306,31 @@ class DataBaseManipulator(DataBaseManipulatorBase):
         Returns:
             True - data in table, False - data not in table.
         """
+        if not table_name or not isinstance(table_name, str):
+            raise TableNameException(table_name)
+
+        if not data or not isinstance(data, dict):
+            raise DataTableException(data)
 
         return bool(self.db_manager.check_table_data_exist(table_name, data))
 
-    def create_table_data(self, table_name: str, data: dict) -> None:
+    def create_table_data(self, table_name: str, data: dict[str, str]) -> None:
         """Method for creating data in a table.
 
         Args:
             table_name: table name.
             data: data dict.
         """
+        if not table_name or not isinstance(table_name, str):
+            raise TableNameException(table_name)
+
+        if not data or not isinstance(data, dict):
+            raise DataTableException(data)
+
         self.db_manager.insert_record_at_table_data(table_name, data)
 
-    def get_table_data(self, table_name: str, search_condition: Optional[str] = None, limit: Optional[int] = None
-                       ) -> list[tuple]:
+    def get_table_data(self, table_name: str, search_condition: Optional[dict] = None,
+                       limit: Optional[int] = None) -> list[tuple]:
         """Method for obtaining data in a table.
 
         Args:
@@ -299,9 +341,12 @@ class DataBaseManipulator(DataBaseManipulatorBase):
         Returns:
             List with arrays of data.
         """
-        return self.db_manager.get_table_data(table_name, search_condition, limit)
+        if not table_name or not isinstance(table_name, str):
+            raise TableNameException(table_name)
 
-    def update_table_data(self, table_name: str, data: dict, search_condition: str) -> None:
+        return self.db_manager.get_record_from_table(table_name, search_condition, limit)
+
+    def update_table_data(self, table_name: str, data: dict, search_condition: dict) -> None:
         """Method for updating data in a table.
 
         Args:
@@ -309,6 +354,15 @@ class DataBaseManipulator(DataBaseManipulatorBase):
             data: new data to replace.
             search_condition: record search condition.
         """
+        if not table_name or not isinstance(table_name, str):
+            raise TableNameException(table_name)
+
+        if not data or not isinstance(data, dict):
+            raise DataTableException(data)
+
+        if not search_condition:
+            raise SearchConditionException(search_condition)
+
         self.db_manager.update_record_at_table(table_name, data, search_condition)
 
     def delete_table_data(self, table_name: str) -> None:
@@ -317,19 +371,62 @@ class DataBaseManipulator(DataBaseManipulatorBase):
         Args:
             table_name: table name.
         """
+        if not isinstance(table_name, str):
+            raise TableNameException(table_name)
+
         self.db_manager.delete_table_data(table_name)
 
-    def create_or_update_table_data(self, table_name: str, data: dict, search_condition: str, limit: int) -> None:
+    def create_or_update_table_data(self, table_name: str, data: dict, search_condition: dict) -> None:
         """A method for creating or updating data in a table.
 
         Args:
             table_name: table name.
             data: new data to replace.
             search_condition: record search condition.
-            limit: limit on receiving rows in the table.
         """
-        existing_data = self.db_manager.get_table_data(table_name, search_condition, limit)
+        if not isinstance(table_name, str):
+            raise TableNameException(table_name)
+
+        if not data or not isinstance(data, dict):
+            raise DataTableException(data)
+
+        if not search_condition:
+            raise SearchConditionException(search_condition)
+
+        if self.get_table_data(table_name, data):  # if the record is already present in the table
+            return
+
+        existing_data = self.get_table_data(table_name, search_condition)
         if existing_data:
             self.update_table_data(table_name, data, search_condition)
         else:
-            self.db_manager.insert_record_at_table_data(table_name, data)
+            self.create_table_data(table_name, data)
+
+
+@dataclass
+class DataBaseManipulatorException(Exception):
+    field: Any
+
+    def __str__(self):
+        return f'Invalid type of parameter - {self.field}.'
+
+
+@dataclass
+class TableNameException(DataBaseManipulatorException):
+    field: str
+
+
+@dataclass
+class DataCreateTableException(DataBaseManipulatorException):
+    field: dict[str, str]
+
+
+@dataclass
+class DataTableException(DataBaseManipulatorException):
+    field: dict[str, str]
+
+
+class SearchConditionException(DataBaseManipulatorException):
+
+    def __str__(self):
+        return f'Invalid search argument - {self.field}'
