@@ -1,6 +1,5 @@
 import json
 from abc import ABC, abstractmethod
-from os import getcwd, path
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional, Union
@@ -12,8 +11,8 @@ from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support.expected_conditions import presence_of_element_located
 
-from settings import STEAM_LOGIN, STEAM_PASSWORD, DEBUG, DATE_FORMAT
-from lib.database_manager import DatabaseManager
+from settings import STEAM_LOGIN, STEAM_PASSWORD, DATE_FORMAT, STEAM_MAIN
+from lib.database_manipulator import DataBaseManipulator
 from lib.web_elements import LOGIN_FIELD, PASSWORD_FIELD, AUTH_BUTTON, GLOBAL_LOGIN_BUTTON
 from lib.webdriver import Driver, get_user_agent, add_cookies
 
@@ -44,7 +43,7 @@ class Authorization(AuthorizationBase):
 
     def exec(self, cookies: Optional[list[dict]] = None) -> Union[Driver, WebDriver]:
         super().exec()
-        self.driver.get('https://store.steampowered.com/login/')
+        self.driver.get(f'{STEAM_MAIN}/login/home')
         waiter = WebDriverWait(self.driver, self.driver_timeout)
 
         if cookies:
@@ -87,26 +86,19 @@ class AuthorizationManagerBase(ABC):
 class AuthorizationManager(AuthorizationManagerBase):
 
     def __post_init__(self) -> None:
-        db_name = 'SteamTrade.db'
-        if DEBUG:
-            db_name = path.join(getcwd(), 'tests', 'TestDB.db')
+        self.db_manipulator = DataBaseManipulator()
 
-        self.db_manager = DatabaseManager(db_name)
-        if self.db_manager is None:
-            raise Exception('DB Manager is missing')
+    def create_auth_table(self) -> None:
+        db_fields = {'create_date': 'DATE', 'update_date': 'DATE', 'user_agent': 'TEXT', 'cookies': 'TEXT'}
+        self.db_manipulator.create_table(self.table_name, db_fields)
 
     @property
     def get_current_date(self):
         return datetime.now().strftime(DATE_FORMAT)
 
-    def create_auth_table(self) -> None:
-        if not self.db_manager.check_table_exist(self.table_name):
-            db_fields = ['create_date DATE', 'update_date DATE', 'user_agent TEXT', 'cookies TEXT']
-            self.db_manager.create_table(self.table_name, db_fields)
-
     @property
     def get_data_from_table(self) -> list[tuple]:
-        return self.db_manager.get_table_data(self.table_name, self.table_limit)
+        return self.db_manipulator.get_table_data(self.table_name, limit=self.table_limit)
 
     @property
     def get_valid_creds(self, ) -> Optional[list[tuple]]:
@@ -115,40 +107,13 @@ class AuthorizationManager(AuthorizationManagerBase):
         if valid_creds:
             return valid_creds
 
-    def check_user_agent_at_table(self, user_agent: str) -> bool:
-        records: list[tuple] = self.get_data_from_table
-        return bool(any(i for i in records if i[3] == user_agent)) if records else False
+    def create_or_update_cred(self, user_agent: str, cookies: Optional[str]) -> None:
+        current_date = str(self.get_current_date)
+        search_condition = {'user_agent': user_agent}
+        data = {'user_agent': user_agent, 'cookies': cookies, 'update_date': current_date}
+        additional_column = {'create_date': current_date}
 
-    def update_cred(self, user_agent: str, cookies: Optional[str]) -> None:
-        if not user_agent:
-            return
-
-        set_data = [f'update_date = \'{self.get_current_date}\'']
-        if cookies:
-            set_data.append(f'cookies = \'{cookies}\'')
-
-        set_data = ','.join(set_data)
-        search_condition = f'user_agent = \'{user_agent}\''
-        self.db_manager.update_record_at_table(self.table_name, set_data, search_condition)
-
-    def insert_cred(self, user_agent: str, cookies: str) -> None:
-        if user_agent and cookies:
-            current_date = self.get_current_date
-            data = {
-                'create_date': current_date,
-                'update_date': current_date,
-                'user_agent': user_agent,
-                'cookies': cookies
-            }
-            self.db_manager.insert_table_data(self.table_name, data)
-
-    def create_or_update_cred(self, user_agent: Optional[str] = None, cookies: Optional[str] = None) -> None:
-        if user_agent is None or cookies is None:
-            return
-        if self.check_user_agent_at_table(user_agent):
-            self.update_cred(user_agent, cookies)
-        else:
-            self.insert_cred(user_agent, cookies)
+        self.db_manipulator.create_or_update_table_data(self.table_name, data, search_condition, additional_column)
 
     def exec(self, ) -> Union[Driver, WebDriver]:
         self.create_auth_table()
@@ -156,9 +121,9 @@ class AuthorizationManager(AuthorizationManagerBase):
         #  in the future you can add multithreading here
         if valid_creds := self.get_valid_creds:
             first_record = valid_creds[0]
-            table_user_agent: tuple[str] = (f'user-agent={first_record[2]}',)  # first_record[2] - user_agent column
+            table_user_agent: tuple[str] = (f'user-agent={first_record[3]}',)  # first_record[3] - user_agent column
             driver = Driver(custom_settings=table_user_agent).get_driver
-            if table_cookies := first_record[3]:  # first_record[3] - cookie column
+            if table_cookies := first_record[4]:  # first_record[4] - cookie column
                 cookies = json.loads(table_cookies)
                 driver = Authorization(driver=driver).exec(cookies=cookies)
         else:

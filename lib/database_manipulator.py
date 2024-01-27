@@ -376,13 +376,15 @@ class DataBaseManipulator(DataBaseManipulatorBase):
 
         self.db_manager.delete_table_data(table_name)
 
-    def create_or_update_table_data(self, table_name: str, data: dict, search_condition: dict) -> None:
+    def create_or_update_table_data(self, table_name: str, data: dict, search_condition: dict,
+                                    additional_columns: Optional[dict] = None) -> None:
         """A method for creating or updating data in a table.
 
         Args:
             table_name: table name.
             data: new data to replace.
             search_condition: record search condition.
+            additional_columns: additional columns for creation record.
         """
         if not isinstance(table_name, str):
             raise TableNameException(table_name)
@@ -400,6 +402,8 @@ class DataBaseManipulator(DataBaseManipulatorBase):
         if existing_data:
             self.update_table_data(table_name, data, search_condition)
         else:
+            if additional_columns:
+                data |= additional_columns
             self.create_table_data(table_name, data)
 
 
