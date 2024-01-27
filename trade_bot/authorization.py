@@ -1,7 +1,6 @@
 import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Optional, Union
 
 from selenium.common import TimeoutException
@@ -11,9 +10,11 @@ from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support.expected_conditions import presence_of_element_located
 
-from settings import STEAM_LOGIN, STEAM_PASSWORD, DATE_FORMAT, STEAM_MAIN
+from settings import STEAM_LOGIN, STEAM_PASSWORD, STEAM_MAIN
+
+from trade_bot.util import get_current_date
 from lib.database_manipulator import DataBaseManipulator
-from lib.web_elements import LOGIN_FIELD, PASSWORD_FIELD, AUTH_BUTTON, GLOBAL_LOGIN_BUTTON
+from trade_bot.web_elements import LOGIN_FIELD, PASSWORD_FIELD, AUTH_BUTTON, GLOBAL_LOGIN_BUTTON
 from lib.webdriver import Driver, get_user_agent, add_cookies
 
 DRIVER_TIMEOUT = 10
@@ -93,10 +94,6 @@ class AuthorizationManager(AuthorizationManagerBase):
         self.db_manipulator.create_table(self.table_name, db_fields)
 
     @property
-    def get_current_date(self):
-        return datetime.now().strftime(DATE_FORMAT)
-
-    @property
     def get_data_from_table(self) -> list[tuple]:
         return self.db_manipulator.get_table_data(self.table_name, limit=self.table_limit)
 
@@ -108,7 +105,7 @@ class AuthorizationManager(AuthorizationManagerBase):
             return valid_creds
 
     def create_or_update_cred(self, user_agent: str, cookies: Optional[str]) -> None:
-        current_date = str(self.get_current_date)
+        current_date = str(get_current_date())
         search_condition = {'user_agent': user_agent}
         data = {'user_agent': user_agent, 'cookies': cookies, 'update_date': current_date}
         additional_column = {'create_date': current_date}
