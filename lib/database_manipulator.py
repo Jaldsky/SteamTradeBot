@@ -3,6 +3,8 @@ from dataclasses import dataclass
 from sqlite3 import connect, Connection, Cursor
 from typing import Optional, Any
 
+from pandas import DataFrame
+
 from settings import DB_PATH
 
 
@@ -180,6 +182,11 @@ class DatabaseManager(DatabaseManagerBase):
         self.conn.commit()
         self.close_connect()
 
+    def dataframe_to_table(self, df: DataFrame, table_name: str, params: dict) -> None:
+        self.connect()
+        df.to_sql(table_name, self.conn, **params)
+        self.close_connect()
+
 
 @dataclass
 class DataBaseManipulatorBase(ABC):
@@ -250,6 +257,10 @@ class DataBaseManipulatorBase(ABC):
     @abstractmethod
     def create_or_update_table_data(self, table_name: str, data: dict, search_condition: str) -> None:
         """A method for creating or updating data in a table."""
+
+    @abstractmethod
+    def dataframe_to_table(self, df: DataFrame, table_name: str, params: dict) -> None:
+        """Method for adding a dataframe to a table."""
 
 
 @dataclass
@@ -405,6 +416,9 @@ class DataBaseManipulator(DataBaseManipulatorBase):
             if additional_columns:
                 data |= additional_columns
             self.create_table_data(table_name, data)
+
+    def dataframe_to_table(self, df: DataFrame, table_name: str, params: dict) -> None:
+        self.db_manager.dataframe_to_table(df, table_name, params)
 
 
 @dataclass
